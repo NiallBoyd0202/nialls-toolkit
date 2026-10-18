@@ -1,4 +1,4 @@
-// Business logic: settings, Keepa client, product cache, storefront tracking, CSV export/import, Discord.
+// Business logic: settings, Keepa client, product cache, storefront tracking, CSV export/import.
 import * as db from './db.js';
 import { KeepaClient, DemoKeepa } from './keepa.js';
 import {
@@ -12,9 +12,6 @@ export const DEFAULT_SETTINGS = {
   keepaKey: '',
   demoMode: true,
   productCacheHours: 24,
-  discordWebhook: '',
-  discordOnNew: true,
-  discordMaxPerSeller: 10,
   ebayFeePct: 0.128,
   ebayFeeFixed: 0.30,
 };
@@ -206,10 +203,6 @@ export async function refreshSellers(keys, { onProgress = () => {}, fetchDetails
   summary.tokensUsed = k.used - summary.startTokens;
   await db.put('refreshLog', { at: now, sellers: summary.sellers, newCount: summary.newItems.length, removed: summary.removed, tokensUsed: summary.tokensUsed, errors: summary.errors.length });
   if (full) await db.kvSet('lastFullRefresh', now);
-
-  if (s.discordWebhook && s.discordOnNew && summary.newItems.length) {
-    try { await postNewProductsToDiscord(summary.newItems); } catch (e) { summary.discordError = e.message; }
-  }
   return summary;
 }
 
@@ -285,61 +278,4 @@ export function parseStorefrontImport(rows, defaultDomain = 2) {
     });
   }
   return [...out.values()];
-}
-
-// ---------------------------------------------------------------------------
-// Discord
-// ---------------------------------------------------------------------------
-export async function discordSend(payload) {
-  const s = await getSettings();
-  if (!s.discordWebhook) throw new Error('No Discord webhook set');
-  if (!/^https:\/\/(discord|discordapp)\.com\/api\/webhooks\//.test(s.discordWebhook)) throw new Error('That does not look like a Discord webhook URL');
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const res = await fetch(s.discordWebhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    if (res.status === 429) {
-      let wait = 2000;
-      try { wait = ((await res.json()).retry_after || 2) * 1000; } catch { /* default */ }
-      await sleep(wait);
-      continue;
-    }
-    if (!res.ok) throw new Error(`Discord returned HTTP ${res.status}`);
-    return true;
-  }
-  throw new Error('Discord rate limit — try again shortly');
-}
-
-export async function postNewProductsToDiscord(items) {
-  const s = await getSettings();
-  const bySeller = new Map();
-  for (const it of items) {
-    if (!bySeller.has(it.sellerKey)) bySeller.set(it.sellerKey, []);
-    bySeller.get(it.sellerKey).push(it);
-  }
-  for (const [skey, list] of bySeller) {
-    const seller = await db.get('sellers', skey);
-    const sym = MARKETS[seller?.domain || 2]?.symbol || '£';
-    const shown = list.slice(0, Math.min(10, s.discordMaxPerSeller || 10));
-    const embeds = [];
-    for (const it of shown) {
-      const p = await db.get('products', `${it.domain}:${it.asin}`);
-      embeds.push({
-        title: (p?.title || it.asin).slice(0, 240),
-        url: amazonUrl(it.domain, it.asin),
-        color: 0x4f4fc9,
-        fields: [
-          { name: 'Price', value: p?.price ? money(p.price, sym) : '—', inline: true },
-          { name: 'BSR', value: p?.bsr ? `#${num(p.bsr)}` : '—', inline: true },
-          { name: 'Offers', value: String(p?.offerCount ?? '—'), inline: true },
-        ],
-        footer: { text: `${it.asin}${p?.category ? ' · ' + p.category : ''}` },
-        thumbnail: p?.image ? { url: `https://m.media-amazon.com/images/I/${p.image}` } : undefined,
-      });
-    }
-    await discordSend({
-      username: APP_NAME,
-      content: `🆕 **${list.length} new product${list.length === 1 ? '' : 's'}** from **${seller?.name || seller?.sellerId || skey}**${list.length > shown.length ? ` (showing ${shown.length})` : ''}`,
-      embeds,
-    });
-    await sleep(600);
-  }
 }

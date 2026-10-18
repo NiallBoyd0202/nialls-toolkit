@@ -42,7 +42,7 @@ There's no server and no subscription. Each device keeps its own copy of your da
   - an activity log of emails, calls, notes and stage changes
   - import or export as CSV
 - **Email:** pick a template and the email fills itself in (contact, brands, products, your details). **Open in email app** logs it, moves the supplier to Emailed and sets the follow-up date.
-- Follow-ups due show on the Outreach overview, the menu badge, the FBA Admin dashboard and the Monday summary.
+- Follow-ups due show on the Outreach overview, the menu badge, and the FBA Admin dashboard's Last week card.
 - Outreach has its own **Outreach** and **Outreach Brands** tabs in the Google Sheet, and is included in backups.
 
 ## Cash flow: daily budget
@@ -70,7 +70,7 @@ Also on the page:
 - **Spending against target** shows each day's target next to what left the bank, not counting planned bills.
 - **What if…** tries lower or higher sales, late payouts or a big one-off purchase.
 
-**Safe to spend today** is also on the FBA Admin dashboard and in the Monday summary.
+**Safe to spend today** is also on the FBA Admin dashboard, in its tile and in the Last week card.
 
 **Log a spend** (on the Cash flow page, or the Windows app's taskbar shortcut): note a purchase as you make it.
 
@@ -86,6 +86,54 @@ FBA Admin → Settings & Google Sheets → **Sales, fees, COGS and expenses come
 - **What it feeds:** the P&L, Sold products, Stock value, the VAT gauge, year end, the daily budget and the Returns tracker's unit costs. SellerFuse's eBay orders replace the eBay tracker in the Amazon + eBay figures from the cut-over date.
 - **Reports guide:** shows the SellerFuse downloads instead.
 - **Column names** are a first guess until they're matched against real SellerFuse exports.
+
+## Supplier price lists (v2.2)
+
+Sourcing → **Price lists**. Drop a wholesaler's price list (CSV or Excel).
+
+- **Reading the list:** columns are found by name, even below a banner row. You set whether prices are per unit or per case, and ex or inc VAT.
+- **Barcodes:** barcodes Excel has turned into "5.01E+12" are flagged.
+- **Find on Amazon:** looks up each barcode through Keepa, about 1 token each. The cost is shown first, and a barcode already looked up is free on any device.
+- **Lines without a barcode:** search by name, about 10 tokens each. Check name matches, and use ✕ to undo a wrong one.
+- **Results:** each line shows profit, ROI and max buy after fees, prep and shipping, plus sales, price stability, competition and a score.
+- **Filters:** min ROI, min profit, and hide Amazon-sold.
+- **Ticked to Outreach:** adds the products as leads linked to that supplier at their price.
+
+## Lead sheet (v2.2)
+
+Sourcing → **Lead sheet** reads your Google Sheet ("Buy Sheet") with your Google sign-in. It never writes to it and uses no Keepa tokens. It shows:
+
+- the best ones to buy (score: ROI, profit per unit, sales per month, and a nudge when the price is due to go up within 2 weeks)
+- most profitable, highest ROI and best sellers
+- prices going up soon
+- stats by store and by month
+- every lead, sortable and searchable
+
+ROI is worked out as profit ÷ cost, because the sheet's ROI column mixes formats. The last copy stays on each device for offline use.
+
+## Weekly backups to Google Drive (v2.2)
+
+Backup & restore → **Weekly backups to Google Drive**.
+
+- **What:** a dated copy of everything (receipts included, API keys never), once a week.
+- **Where:** **Niall's Toolkit Backups** in your Drive, kept forever.
+- **Who makes it:** whichever device is open first.
+- **Restoring:** **Show backups → Restore** merges a backup in, putting back anything missing without deleting anything.
+
+## Start Up Loan (v2.2)
+
+Personal → **Start Up Loan**, kept out of the business figures.
+
+- **Each loan part:** amount, APR, term, drawdown and first payment dates. The monthly payment is worked out, or you enter the exact one from your statement.
+- **What it shows:** what's left on each part and in total, monthly repayments (and when they rise), interest paid and to come, and the debt-free date.
+- **Calendar and chart:** a payment calendar, and a chart of the total owed.
+- **Lump sums:** record each one (it previews the interest saved). Choose whether it finishes the loan sooner or lowers the monthly payment.
+
+## Returns: refunds, outbound fee, loss report (v2.2)
+
+- **Refunds:** refunded items in your SellerToolkit / SellerFuse orders become Returns tracker units automatically. Amazon's returns report later fills in the LPN and condition, never duplicating. Items your orders say went back to stock are marked auto-relisted.
+- **Outbound fee:** each returned unit carries the **outbound FBA fee** Amazon keeps on a return.
+- **Loss report:** return rate and loss per product (flagging ones to review), by month, where the money went, and why items came back.
 
 ## Phone extras (v2.1)
 
@@ -142,7 +190,7 @@ In the **New products** feed you can:
 
 On the **Storefronts** tab you can tick 2 or more storefronts and click **Shared products** to see what they all sell.
 
-**Discord:** paste a channel webhook in Settings. After each refresh, new products are posted to the channel, grouped by storefront with price, BSR and offers.
+New products show in the **New products** feed, with a count on the menu, on every device. (The Discord option was removed in 2.2.)
 
 Note: Keepa collects storefront data daily and includes products listed within the last 7 days. So "new" means new since your last refresh, and "dropped" can lag by up to a week.
 
@@ -196,7 +244,7 @@ Re-importing any report is safe: each report line is applied to a unit at most o
 12. **Director's loan.** What the company owes you, now and for any year, with a balance chart and the full statement: bank lines categorised Director Loan, costs you paid personally, and entries you add on this tab for money put in or repaid outside the business account. Set the opening balance here (from your last accounts). It's included in FBA Admin's backup.
 13. **Year end.** At the bottom, **Accountant pack** downloads one zip for a year or a quarter: a printable summary, the P&L, bank transactions (with the receipt for each), costs outside the bank, the director's loan, sold products, payouts, Amazon fees, stock, subscriptions and every saved invoice in month folders.
    The year end itself: Amazon-only and Amazon + eBay P&L, a corporation tax estimate, stock at cost, the director's loan account (enter its opening balance in Settings) and a checklist of what to fix before sending it to your accountant. *Print / Save as PDF* or CSV, and it's in the Google Sheet's Year End tab. Figures are estimates for management, not statutory accounts.
-14. **Targets and the Monday summary** (Settings & Google Sheets). Set a sales and net profit target per month to see progress and the daily pace needed on the dashboard. Switch on the *Monday summary* to get last week's figures, the month's target, the cash forecast, bills coming up and anything that needs doing posted to your Discord webhook each week.
+14. **Targets and Last week** (Settings & Google Sheets). Set a sales and net profit target per month to see progress and the daily pace needed on the dashboard. The **Last week** card at the top of the dashboard has last week's figures, the month's target, your budget and cash forecast, bills coming up and anything that needs doing.
 15. **Google Sheets.** In *Settings & Google Sheets*, follow the one-time set-up (about 10 minutes), click *Connect Google*, then *Sync now*. The extension creates an **FBA Accounting** spreadsheet and keeps it updated after every import and edit. You can change categories in the sheet's Transactions tab, then click *Pull category changes*.
 
 Not counted as overheads: stock purchases (costed through COGS), Amazon / eBay payouts (already in the sales figures), director's loan (including the Klarna payments) and transfers. Ad spend paid by card is an overhead; ads billed to your Amazon balance come from the settlement report. The financial year runs from 28 February (change it in Settings).

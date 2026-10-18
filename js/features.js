@@ -12,7 +12,7 @@ export const FEATURES = [
   {
     id: 'settings',
     label: 'General settings',
-    description: 'Keepa options, Discord, eBay fee estimate. Your Keepa API key is never exported.',
+    description: 'Keepa options and the eBay fee estimate. Your Keepa API key is never exported.',
     kv: ['settings'],
     stores: {},
   },
@@ -70,11 +70,20 @@ export const FEATURES = [
     },
   },
   {
+    id: 'loans',
+    label: 'Start Up Loan',
+    description: 'Your personal loan parts (amount, APR, term, dates, monthly payment) and the lump sums you\'ve paid off.',
+    kv: [],
+    stores: {
+      lnLoans: { keyPath: 'id' },
+      lnExtras: { keyPath: 'id', indexes: [['byLoan', 'loanId']] },
+    },
+  },
+  {
     id: 'storescan',
-    label: 'Store Scan',
-    hidden: true, // not built yet: kept so the database layout and old backups stay compatible
-    description: 'Retailer settings and discounts, scans and their results, barcode-to-ASIN matches, filter presets.',
-    kv: ['storeScanSettings', 'storeScanPresets'],
+    label: 'Supplier price lists',
+    description: 'Price lists you\'ve loaded (ssScans), each line and the Amazon listing it matched (ssResults), and barcode-to-ASIN matches so a barcode is only looked up once (ssMatches). Also the lead sheet link.',
+    kv: ['storeScanSettings', 'storeScanPresets', 'leadSheet'],
     stores: {
       ssRetailers: { keyPath: 'id' },
       ssScans: { keyPath: 'id', indexes: [['byRetailer', 'retailerId']] },

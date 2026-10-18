@@ -9,7 +9,7 @@ import { IS_WEB, IS_STANDALONE, appUrl, openAppTab, onRuntimeMessage, persistSto
 import { completeWebSignIn } from './fbaadmin/google.js';
 import { startAutoSync, syncIndicator } from './sync/auto.js';
 import { handleSetupLink } from './views/sync.js';
-import { maybeSendWeekly } from './fbaadmin/weeklysend.js';
+import { maybeBackup } from './sync/drivebackup.js';
 import { handleAmazonLink } from './links.js';
 
 // `feature` ties a page to its entry in features.js (used by the Backup button).
@@ -19,6 +19,8 @@ const ROUTES = [
   { id: 'tracker/storefronts', label: 'Storefronts', icon: 'store', module: './views/tracker.js', tab: 'storefronts', title: 'Storefront tracker', feature: 'tracker' },
   { group: 'Sourcing' },
   { id: 'outreach', label: 'Outreach', icon: 'users', module: './views/outreach.js', title: 'Retailer & wholesaler outreach', feature: 'outreach' },
+  { id: 'pricelists', label: 'Price lists', icon: 'scan', module: './views/pricelists.js', title: 'Supplier price lists', feature: 'storescan' },
+  { id: 'leads', label: 'Lead sheet', icon: 'list', module: './views/leadsheet.js', title: 'Lead sheet' },
   { group: 'Returns' },
   { id: 'returns', label: 'FBA Returns tracker', icon: 'undo', module: './views/returns.js', title: 'FBA Returns tracker', feature: 'returns' },
   { group: 'Accounting' },
@@ -26,6 +28,8 @@ const ROUTES = [
   // Store Scan (Sourcing) is parked for now: its storage stays in features.js so it can be switched back on later.
   { group: 'eBay' },
   { id: 'ebay', label: 'eBay profit tracker', icon: 'pound', module: './views/ebay.js', title: 'eBay profit tracker', feature: 'ebay' },
+  { group: 'Personal' },
+  { id: 'loans', label: 'Start Up Loan', icon: 'wallet', module: './views/loans.js', title: 'Start Up Loan', feature: 'loans' },
   { group: '' },
   { id: 'sync', label: 'Devices & sync', icon: 'cloud', module: './views/sync.js', title: 'Devices & sync' },
   { id: 'backup', label: 'Backup & restore', icon: 'shield', module: './views/backup.js', title: 'Backup & restore' },
@@ -181,12 +185,10 @@ tokenMeter();
   if (!isDemo(s)) { try { await (await keepa()).tokenStatus(); } catch { /* shown on use */ } } // free call
   else (await keepa()).onTokens({ tokensLeft: 1200, refillRate: 20, demo: true });
   importPendingSellers();
-  // The extension sends the Monday summary from its background worker; the web app checks while it's open.
-  if (IS_WEB) {
-    const weekly = () => maybeSendWeekly().catch(() => {});
-    setTimeout(weekly, 15e3);
-    setInterval(weekly, 60 * 60e3);
-  }
+  // Weekly backup to Google Drive, when it's due (whichever device is open first makes it)
+  const backup = () => maybeBackup().then((r) => { if (r.done) toast(`Weekly backup saved to Google Drive (${r.records} records)`, 'success'); }).catch(() => {});
+  setTimeout(backup, 30e3);
+  setInterval(backup, 60 * 60e3);
 })();
 
 // Offline support and "Install app" for the web version. A new version takes over on the next open.

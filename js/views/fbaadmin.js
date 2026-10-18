@@ -9,7 +9,7 @@ import { syncNow, autoSync, pullCategories, overheadSourceFor } from '../fbaadmi
 import { getToken, signOut, isSignedIn, redirectUrl } from '../fbaadmin/google.js';
 import { parseRows, remap, FORMATS as RT_FORMATS } from '../returns/parse.js';
 import { applyImport as rtApplyImport } from '../returns/importer.js';
-import { store as rtStore, getSettings as rtGetSettings } from '../returns/store.js';
+import { store as rtStore, getSettings as rtGetSettings, syncRefunds as rtSyncRefunds } from '../returns/store.js';
 import { stockReport, salesCrossCheck } from '../fbaadmin/stock.js';
 import { reconcilePayouts, accountLines } from '../fbaadmin/settlement.js';
 import { detectSubscriptions, mergeSubscriptions, prettyPayee } from '../fbaadmin/subscriptions.js';
@@ -26,8 +26,7 @@ import { buildWeekly } from '../fbaadmin/weekly.js';
 import { buildPack } from '../fbaadmin/pack.js';
 import { DLA_TYPES, sourceOf, balanceSeries } from '../fbaadmin/dla.js';
 import { history, rates, plan, cashEvents, periods } from '../fbaadmin/stockvalue.js';
-import { discordSend } from '../services.js';
-import { IS_EXT, sendRuntimeMessage } from '../platform.js';
+import { IS_EXT } from '../platform.js';
 import { googleSetupSteps } from './sync.js';
 import { followUpsDue } from '../outreach/analysis.js';
 import { icon, toast, modal, confirmBox, sortable, emptyState, profitClass } from '../ui.js';
@@ -173,6 +172,7 @@ function renderDashboard(body, data, rerender) {
   const maxOut = Math.max(1, ...outRows.map(([, x]) => x));
   body.innerHTML = `
     ${periodBar(data, rerender, `<span class="grow"></span>${s.googleClientId ? `<button class="btn small" id="dashSync">${icon('refresh', 14)} Send to Google Sheet</button>${s.spreadsheetUrl ? ` <a class="btn small ghost" href="${esc(s.spreadsheetUrl)}" target="_blank" rel="noopener">${icon('external', 14)} Open sheet</a>` : ''}` : `<a class="btn small" href="#fbaadmin/settings">${icon('globe', 14)} Set up Google Sheets</a>`}`)}
+    ${weeklyCard(data)}
     ${!hasOrdersInRange && hasBankInRange ? `<div class="callout warn small" style="margin-bottom:12px">No ${SRC()} orders in this period, so the P&L only shows overheads. Import an orders export covering these dates.</div>` : ''}
     ${hasOrdersInRange && p.overheadsFromExpenses ? `<div class="callout small" style="margin-bottom:12px">Overheads come from ${esc(p.overheadsFrom)}: months without bank lines use your ${esc(data.expensesLabel)}. Import older bank statements to use the bank for every month.</div>` : ''}
     ${attention.length ? `<div class="callout warn" style="margin-bottom:14px"><b>Needs attention</b><ul style="margin:6px 0 0 18px">${attention.join('')}</ul></div>` : ''}
@@ -238,6 +238,7 @@ function renderDashboard(body, data, rerender) {
     ${Object.keys(p.overheadsByCat).length ? `<div class="card section"><div class="toolbar"><b>Overheads</b><span class="small muted">from ${esc(p.overheadsFrom)}</span></div>
       <table class="data"><tbody>${Object.entries(p.overheadsByCat).map(([k, x]) => `<tr><td>${esc(k)}</td><td class="r num">${money(x)}</td></tr>`).join('')}<tr><td><b>Total</b></td><td class="r num"><b>${money(p.overheads)}</b></td></tr></tbody></table></div>` : ''}`;
   wirePeriod(body, rerender);
+  const wkc = body.querySelector('#wkCard'); if (wkc) wkc.ontoggle = () => { ui.weeklyOpen = wkc.open; };
   body.querySelectorAll('[data-basis]').forEach((b) => { b.onclick = () => { ui.basis = b.dataset.basis; rerender(); }; });
   const ds = body.querySelector('#dashSync');
   if (ds) ds.onclick = async () => {
@@ -250,6 +251,16 @@ function renderDashboard(body, data, rerender) {
     rerender();
   };
   body.querySelectorAll('[data-cat]').forEach((a) => { a.onclick = () => { ui.cat = a.dataset.cat; ui.dir = ''; ui.tFrom = r.from; ui.tTo = r.to; }; });
+}
+
+// "Last week": the weekly summary (it used to go to Discord), at the top of the dashboard on every device.
+function weeklyCard(data) {
+  let e;
+  try { e = buildWeekly(data, { today: today(), basis: ui.basis }).embeds[0]; } catch { return ''; }
+  const br = (t) => esc(t).replace(/\n/g, '<br>');
+  return `<details class="card card-pad weekly" ${ui.weeklyOpen === false ? '' : 'open'} id="wkCard"><summary><b>Last week</b> <span class="small muted">${esc(e.title.replace(/^Weekly summary · /, ''))}</span></summary>
+    ${e.description ? `<p class="small muted" style="margin-top:8px">${br(e.description)}</p>` : ''}
+    <div class="weekly-grid">${e.fields.map((f) => `<div class="${f.inline ? '' : 'wide'}"><div class="small muted">${esc(f.name)}</div><div class="small">${br(f.value)}</div></div>`).join('')}</div></details>`;
 }
 
 function productList(title, list) {
@@ -1846,6 +1857,10 @@ function renderImport(body, data, rerender) {
           if (s.parsed.formatId === 'amazon_date_range' && s.grid) {
             try { await rtApplyImport(parseRows(s.grid, 'amazon_transactions', RT_FORMATS), { fileName: s.name, store: rtStore, settings: await rtGetSettings() }); } catch { /* the FBA Admin import already succeeded */ }
           }
+          // refunded items in these orders start their Returns tracker units now (and returns get their outbound fee)
+          if (s.parsed.format.kind === 'sales') {
+            try { const r = await rtSyncRefunds(); if (r?.created) toast(`Returns tracker: ${r.created} return${r.created === 1 ? '' : 's'} added from refunds in these orders`, 'info', 6000); } catch { /* the orders import already succeeded */ }
+          }
           if (s.parsed.format.kind === 'settlement') {
             const rec = reconcilePayouts(await store.getAll('faSettlements'), await store.getAll('faTransactions'));
             if (rec.rows.length) toast(`Payouts: ${rec.rows.length - rec.unmatched.length} of ${rec.rows.length} found in the bank${rec.unmatched.length ? '. See Payouts & fees' : ''}`, rec.unmatched.length ? 'info' : 'success', 7000);
@@ -2017,17 +2032,12 @@ async function renderSettings(body, data, rerender) {
         <div class="row"><button class="btn primary" id="saveTg">${icon('check')} Save targets</button></div>
       </div>
       <div class="card card-pad stack">
-        <h3>${icon('bell')} Monday summary to Discord</h3>
-        <p class="small muted">Last week's sales, profit and payouts, progress against this month's target, your bank balance forecast, bills coming up and anything that needs doing (reports due, uncategorised lines, aged stock, missing payouts). It's posted to the Discord webhook in the main <a href="#settings">Settings</a>. Chrome (with the extension) or the app needs to be open; if neither was, it sends the next time one is. With sync on, only one of your devices sends it.</p>
-        <label class="check"><input type="checkbox" id="wkOn" ${s.weeklyDiscord ? 'checked' : ''}> Send it every week</label>
+        <h3>${icon('bell')} Weekly summary &amp; warnings</h3>
+        <p class="small muted">Last week's sales, profit and payouts, this month's target, your budget and bank forecast, bills coming up and anything that needs doing are on the <a href="#fbaadmin/dashboard">Dashboard</a>, at the top under <b>Last week</b>, on every device.</p>
         <div class="form-grid">
-          <label class="field">Day<select id="wkDay">${['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((d, i) => `<option value="${i + 1}" ${Number(s.weeklyDay || 1) === i + 1 ? 'selected' : ''}>${d}</option>`).join('')}</select></label>
-          <label class="field">From (hour)<input id="wkHr" type="number" min="0" max="23" step="1" value="${esc(s.weeklyHour ?? 8)}"></label>
           <label class="field">Warn about aged stock (days before)<input id="agWarn" type="number" min="7" max="180" step="1" value="${esc(s.agedWarnDays ?? 60)}"></label>
         </div>
-        <div class="row"><button class="btn primary" id="saveWk">${icon('check')} Save</button><button class="btn" id="sendWk">Send one now</button><button class="btn ghost" id="prevWk">Preview</button></div>
-        <p class="small muted">${s.weeklyLastSent ? `Last sent for the week of ${dstr(s.weeklyLastSent)}.` : 'Not sent yet.'}</p>
-        <pre class="small" id="wkPrev" hidden style="white-space:pre-wrap;background:var(--panel-2);padding:10px;border-radius:8px;max-height:320px;overflow:auto"></pre>
+        <div class="row"><button class="btn primary" id="saveWk">${icon('check')} Save</button></div>
       </div>
     </div>`;
   const $ = (id) => body.querySelector(`#${id}`);
@@ -2074,18 +2084,8 @@ async function renderSettings(body, data, rerender) {
     toast('Targets saved', 'success'); rerender();
   };
   $('saveWk').onclick = async () => {
-    await saveSettings({ weeklyDiscord: $('wkOn').checked, weeklyDay: Number($('wkDay').value), weeklyHour: Math.max(0, Math.min(23, Number($('wkHr').value) || 0)), agedWarnDays: Math.max(7, Math.min(180, Number($('agWarn').value) || 60)) });
-    sendRuntimeMessage({ type: 'weeklyChanged' });
+    await saveSettings({ agedWarnDays: Math.max(7, Math.min(180, Number($('agWarn').value) || 60)) });
     toast('Saved', 'success'); rerender();
-  };
-  const weeklyPayload = async () => { const d = await loadAll(); const { _week, ...payload } = buildWeekly(d, { today: today(), basis: ui.basis }); return payload; };
-  $('prevWk').onclick = async () => {
-    const pl = await weeklyPayload(); const e = pl.embeds[0];
-    const box = $('wkPrev'); box.hidden = false;
-    box.textContent = [e.title, e.description || '', ...e.fields.map((f) => `\n${f.name}\n${f.value}`)].filter(Boolean).join('\n');
-  };
-  $('sendWk').onclick = async () => {
-    try { await discordSend(await weeklyPayload()); toast('Sent to Discord', 'success'); } catch (e) { toast(`Discord: ${e.message}`, 'error', 7000); }
   };
   $('saveInv').onclick = async () => { await saveSettings({ invoiceStorage: $('invSt').value }); toast('Saved', 'success'); rerender(); };
   $('saveAcc').onclick = async () => {

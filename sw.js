@@ -1,8 +1,8 @@
 // Web app only (the Chrome extension doesn't use this): lets the installed app open without internet and
 // makes it installable. Always tries the network first, so a new version shows up as soon as it's online;
 // falls back to the saved copy when offline or when the network is very slow.
-// Only the app's own files are saved; Keepa, Google and Discord requests are never touched.
-const CACHE = 'nt-app-v2.1.0';
+// Only the app's own files are saved; Keepa and Google requests are never touched.
+const CACHE = 'nt-app-v2.2.0';
 const CORE = ['./dashboard.html', './css/app.css', './js/app.js', './app.webmanifest', './icons/icon48.png', './icons/icon192.png'];
 const SLOW_MS = 5000;
 

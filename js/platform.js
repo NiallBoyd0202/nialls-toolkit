@@ -2,7 +2,7 @@
 // Everything Chrome-only goes through here, so the rest of the code runs the same in both.
 
 // Keep in step with "version" in manifest.json.
-export const VERSION = '2.1.0';
+export const VERSION = '2.2.0';
 
 export const IS_EXT = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
 export const IS_WEB = !IS_EXT;

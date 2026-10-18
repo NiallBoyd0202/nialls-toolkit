@@ -31,12 +31,14 @@ function pickFile() {
   });
 }
 
-// Read a file, show what merging it would do, then import the features the user keeps ticked.
-export async function importFlow(onlyFeatureId = null) {
-  const file = await pickFile();
-  if (!file) return;
+// Read a file (or a backup already loaded, e.g. from Google Drive), show what merging it would do, then import the
+// features the user keeps ticked.
+export async function importFlow(onlyFeatureId = null, { data = null, name = '' } = {}) {
+  let file = null;
+  if (!data) { file = await pickFile(); if (!file) return; }
   let norm;
-  try { norm = normaliseBackup(JSON.parse(await file.text())); } catch (e) { toast(e.message || 'Could not read that file', 'error'); return; }
+  try { norm = normaliseBackup(data || JSON.parse(await file.text())); } catch (e) { toast(e.message || 'Could not read that file', 'error'); return; }
+  file = file || { name };
 
   const inFile = Object.keys(norm.features);
   if (onlyFeatureId && !inFile.includes(onlyFeatureId)) {

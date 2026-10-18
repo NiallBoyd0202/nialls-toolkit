@@ -1,5 +1,7 @@
 // FBA Returns tracker: overview, units (with the unit drawer), import, costs, unmatched inbox, settings.
-import { store, getSettings, saveSettings } from '../returns/store.js';
+import { store, getSettings, saveSettings, syncRefunds } from '../returns/store.js';
+import { applySources } from '../fbaadmin/sources.js';
+import { kvGet as getKv } from '../db.js';
 import {
   STATUSES, STATUS, NEXT_STATUS, COST_BUCKETS, SALE_FEES, CHANNELS, DISPOSITIONS,
   pnl, rollup, outcome, daysOpen, transition, emptyUnit, emptySale, num, r2,
@@ -11,7 +13,7 @@ import { readTabularFile } from '../xlsx.js';
 import { esc, num as fmtNum, pct, toCSV, downloadFile } from '../util.js';
 
 const ui = { tab: 'overview', q: '', status: '', outcome: '', staged: [] };
-const TABS = [['overview', 'Overview'], ['units', 'Units'], ['import', 'Import'], ['costs', 'Costs'], ['unmatched', 'Unmatched'], ['settings', 'Settings']];
+const TABS = [['overview', 'Overview'], ['units', 'Units'], ['report', 'Loss report'], ['import', 'Import'], ['costs', 'Costs'], ['unmatched', 'Unmatched'], ['settings', 'Settings']];
 const GROUP_TAG = { 'At Amazon': 'warn', 'In transit': '', 'At prep': '', 'For sale': 'new', Sold: 'new', Closed: 'gone' };
 import { OUTCOMES, ledgerRows } from '../returns/ledger.js';
 
@@ -37,6 +39,11 @@ export async function render(root, ctx) {
     ui.tab = TABS.some(([id]) => id === tab) ? tab : 'overview';
     if (tab === 'units' && rest[0]) { ui.status = rest[0] === 'all' ? '' : rest[0]; }
   }
+  // refunds in your order data become return units (never duplicated); once per visit
+  if (!ui.refundsChecked) {
+    ui.refundsChecked = true;
+    try { const r = await syncRefunds(); if (r?.created) toast(`${r.created} return${r.created === 1 ? '' : 's'} added from refunds in your orders${r.relisted ? ` (${r.relisted} already back in stock)` : ''}`, 'success', 6000); } catch { /* the tracker still works without it */ }
+  }
   const data = await loadAll();
   const rerender = () => render(root, { ...ctx, sub: ui.tab });
   root.innerHTML = `
@@ -47,7 +54,7 @@ export async function render(root, ctx) {
     body.innerHTML = emptyState('undo', 'No returned units yet', 'Import your <b>FBA customer returns</b> report (Seller Central → Reports → Fulfilment → Customer returns). Each returned item becomes one unit you can follow to resale. Add SKU costs first if you can, for example your SellerToolkit Cost of Goods export, so units start with their cost.', '<a class="btn primary" href="#returns/import">Import reports</a>');
     return;
   }
-  const views = { overview: renderOverview, units: renderUnits, import: renderImport, costs: renderCosts, unmatched: renderUnmatched, settings: renderSettings };
+  const views = { overview: renderOverview, units: renderUnits, report: renderReport, import: renderImport, costs: renderCosts, unmatched: renderUnmatched, settings: renderSettings };
   await views[ui.tab](body, data, rerender, ctx);
 }
 
@@ -114,7 +121,91 @@ function renderOverview(body, data, rerender) {
 }
 
 function unitCell(u) {
-  return `<div style="max-width:360px"><b class="small">${esc(u.title || u.sku || 'Unit')}</b><div class="small muted mono">${esc(u.sku)}${u.lpn ? ` · ${esc(u.lpn)}` : ''}</div></div>`;
+  return `<div style="max-width:360px"><b class="small">${esc(u.title || u.sku || 'Unit')}</b>${u.fromRefund ? ' <span class="tag warn" title="Made from a refund in your orders. Amazon\'s returns report fills in the LPN and condition.">from refund</span>' : ''}<div class="small muted mono">${esc(u.sku)}${u.lpn ? ` · ${esc(u.lpn)}` : ''}</div></div>`;
+}
+
+// ---------------------------------------------------------------------------
+// Loss report: return rate and what returns cost, per product and per month
+// ---------------------------------------------------------------------------
+async function renderReport(body, data) {
+  const months = ui.rpMonths ?? 12;
+  const from = months ? new Date(Date.now() - months * 30.44 * 864e5).toISOString().slice(0, 10) : '0000';
+  const fa = (await getKv('fbaAdminSettings')) || {};
+  const { orders } = applySources({ orders: await store.allOrders() }, fa);
+  const sold = new Map(); const soldByMonth = new Map();
+  for (const o of orders) {
+    if ((o.channel || 'amazon') === 'ebay' || !o.date || o.date < from) continue;
+    const k = String(o.sku || '').toLowerCase(); const q = Number(o.qtyShipped) || 0;
+    sold.set(k, (sold.get(k) || 0) + q); soldByMonth.set(o.date.slice(0, 7), (soldByMonth.get(o.date.slice(0, 7)) || 0) + q);
+  }
+  const units = data.units.filter((u) => (u.returnDate || '') >= from);
+  const isSettledLoss = (u) => STATUS[u.status]?.terminal && u.status !== 'relisted_by_amazon';
+  const isOpen = (u) => !STATUS[u.status]?.terminal;
+  // per product
+  const by = new Map();
+  for (const u of units) {
+    const k = String(u.sku || '').toLowerCase();
+    if (!by.has(k)) by.set(k, { sku: u.sku, title: u.title, asin: u.asin, returns: 0, relisted: 0, settled: 0, open: 0, settledLoss: 0, openExposure: 0, reasons: {} });
+    const r = by.get(k); const p = pnl(u);
+    r.returns++; if (!r.title && u.title) r.title = u.title;
+    if (u.status === 'relisted_by_amazon') r.relisted++;
+    else if (isSettledLoss(u)) { r.settled++; r.settledLoss += p.netVsCost; } else if (isOpen(u)) { r.open++; r.openExposure += p.netVsCost; }
+    const why = String(u.reason || '').split(' — ')[0].trim(); if (why) r.reasons[why] = (r.reasons[why] || 0) + 1;
+  }
+  const rows = [...by.values()].map((r) => {
+    const s = sold.get(String(r.sku || '').toLowerCase()) || 0;
+    const rate = s ? r.returns / s : null;
+    const avg = r.settled ? r.settledLoss / r.settled : null;
+    const review = (rate !== null && rate >= 0.1 && r.returns >= 2) || (avg !== null && avg <= -5 && r.settled >= 2);
+    return { ...r, sold: s, rate, avgLoss: avg, total: r2(r.settledLoss + r.openExposure), settledLoss: r2(r.settledLoss), openExposure: r2(r.openExposure), review, topReason: Object.entries(r.reasons).sort((a, b) => b[1] - a[1])[0]?.[0] || '' };
+  });
+  // per month (by return date)
+  const mon = new Map();
+  for (const u of units) {
+    const m = (u.returnDate || '').slice(0, 7); if (!m) continue;
+    if (!mon.has(m)) mon.set(m, { m, returns: 0, settledLoss: 0, openExposure: 0 });
+    const x = mon.get(m); const p = pnl(u); x.returns++;
+    if (isSettledLoss(u)) x.settledLoss += p.netVsCost; else if (isOpen(u)) x.openExposure += p.netVsCost;
+  }
+  const monthRows = [...mon.values()].sort((a, b) => b.m.localeCompare(a.m));
+  // where the money went
+  const buckets = Object.fromEntries(COST_BUCKETS.map((b) => [b.id, 0]));
+  let reimb = 0; let resale = 0;
+  for (const u of units) { for (const b of COST_BUCKETS) buckets[b.id] += num(u.costs?.[b.id]); reimb += num(u.reimbursement); resale += pnl(u).netSale; }
+  const t = rollup(units);
+  const soldTotal = [...sold.values()].reduce((a, b) => a + b, 0);
+  const reasons = {}; for (const u of units) { const w = String(u.reason || '').split(' — ')[0].trim() || 'No reason given'; reasons[w] = (reasons[w] || 0) + 1; }
+  const kpi = (label, value, sub = '', cls = '') => `<div class="kpi"><div class="label">${label}</div><div class="value ${cls}">${value}</div><div class="sub">${sub}</div></div>`;
+  const totalLoss = rows.reduce((a, r) => a + r.settledLoss, 0); const totalOpen = rows.reduce((a, r) => a + r.openExposure, 0);
+  body.innerHTML = `
+    <div class="row" style="margin-bottom:12px"><div class="seg">${[[3, '3 months'], [6, '6 months'], [12, '12 months'], [0, 'All time']].map(([v, l]) => `<button class="btn small ${months === v ? 'primary' : ''}" data-m="${v}">${l}</button>`).join('')}</div>
+      <span class="small muted grow">by return date${months ? ` · from ${dstr(from)}` : ''}</span><button class="btn small" id="rpCsv">${icon('download', 14)} CSV</button></div>
+    <div class="kpis">
+      ${kpi('Returns', fmtNum(t.units), soldTotal ? `${pct(t.units / soldTotal, 1)} of ${fmtNum(soldTotal)} units sold` : 'import orders in FBA Admin for the return rate')}
+      ${kpi('Lost on finished returns', money(totalLoss), `${fmtNum(rows.reduce((a, r) => a + r.settled, 0))} resold or written off`, profitClass(totalLoss))}
+      ${kpi('Still open', money(totalOpen), `${fmtNum(t.open)} units, if they were written off today`, profitClass(totalOpen))}
+      ${kpi('Back to stock', fmtNum(rows.reduce((a, r) => a + r.relisted, 0)), 'relisted by Amazon: no loss')}
+    </div>
+    <div class="card section"><div class="toolbar"><b>By product</b><span class="small muted">Review = 10%+ returned (2 or more), or losing £5+ a return</span></div>
+      <div class="table-wrap"><table class="data" id="rpT"><thead><tr><th data-sort="title" data-first="asc">Product</th><th data-sort="returns" class="r">Returns</th><th data-sort="sold" class="r">Sold</th><th data-sort="rate" class="r">Return rate</th><th data-sort="avgLoss" class="r" data-first="asc">Loss per return</th><th data-sort="total" class="r" data-first="asc">Total</th><th>Top reason</th></tr></thead><tbody></tbody></table></div></div>
+    <div class="grid2 section">
+      <div class="card"><div class="toolbar"><b>By month</b></div><div class="table-wrap"><table class="data small"><thead><tr><th>Month</th><th class="r">Returns</th><th class="r">Sold</th><th class="r">Rate</th><th class="r">Lost</th><th class="r">Open</th></tr></thead><tbody>
+        ${monthRows.map((x) => { const s = soldByMonth.get(x.m) || 0; return `<tr><td>${esc(new Date(`${x.m}-15T12:00:00Z`).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }))}</td><td class="r num">${x.returns}</td><td class="r num">${s ? fmtNum(s) : '—'}</td><td class="r num">${s ? pct(x.returns / s, 1) : '—'}</td><td class="r num ${profitClass(x.settledLoss)}">${money(r2(x.settledLoss))}</td><td class="r num muted">${money(r2(x.openExposure))}</td></tr>`; }).join('') || '<tr><td class="empty" colspan="6">No returns in this period</td></tr>'}
+      </tbody></table></div></div>
+      <div class="card"><div class="toolbar"><b>Where the money went</b></div><table class="data small"><tbody>
+        ${COST_BUCKETS.filter((b) => buckets[b.id]).map((b) => `<tr><td>${esc(b.label)}${b.basis ? ' <span class="tag">cost of the item</span>' : ''}</td><td class="r num">${money(r2(buckets[b.id]))}</td></tr>`).join('')}
+        <tr><td><b>Won back</b>: resale after fees</td><td class="r num pos">${money(r2(resale))}</td></tr>
+        <tr><td><b>Won back</b>: Amazon reimbursements</td><td class="r num pos">${money(r2(reimb))}</td></tr>
+        <tr><td colspan="2" class="small muted" style="padding-top:10px"><b>Why they came back</b></td></tr>
+        ${Object.entries(reasons).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, n]) => `<tr><td class="small">${esc(k.slice(0, 80))}</td><td class="r num">${n}</td></tr>`).join('')}
+      </tbody></table></div>
+    </div>`;
+  sortable(body.querySelector('#rpT'), rows, (r) => `<tr${r.review ? ' class="missing"' : ''}><td><div style="max-width:340px"><b class="small">${esc((r.title || r.sku || '').slice(0, 70))}</b>${r.review ? ' <span class="tag warn">Review</span>' : ''}<div class="small muted mono">${esc(r.sku || '')}${r.open ? ` · ${r.open} still open` : ''}${r.relisted ? ` · ${r.relisted} back to stock` : ''}</div></div></td>
+    <td class="r num">${r.returns}</td><td class="r num">${r.sold ? fmtNum(r.sold) : '—'}</td><td class="r num ${r.rate >= 0.1 ? 'neg' : ''}">${r.rate === null ? '—' : pct(r.rate, 1)}</td>
+    <td class="r num ${profitClass(r.avgLoss)}">${r.avgLoss === null ? '—' : money(r2(r.avgLoss))}</td><td class="r num ${profitClass(r.total)}">${money(r.total)}</td><td class="small">${esc(r.topReason.slice(0, 40))}</td></tr>`, { defaultKey: 'total', defaultDir: 'asc' });
+  body.querySelectorAll('[data-m]').forEach((b) => { b.onclick = () => { ui.rpMonths = Number(b.dataset.m); renderReport(body, data); }; });
+  body.querySelector('#rpCsv').onclick = () => downloadFile(`returns-loss-report-${today()}.csv`, toCSV([['SKU', 'Title', 'Returns', 'Units sold', 'Return rate %', 'Finished', 'Loss on finished', 'Loss per return', 'Still open', 'Open if written off', 'Back to stock', 'Total', 'Top reason', 'Review'],
+    ...rows.map((r) => [r.sku, r.title, r.returns, r.sold, r.rate === null ? '' : Math.round(r.rate * 1000) / 10, r.settled, r.settledLoss, r.avgLoss === null ? '' : r2(r.avgLoss), r.open, r.openExposure, r.relisted, r.total, r.topReason, r.review ? 'Yes' : ''])]));
 }
 
 // ---------------------------------------------------------------------------
@@ -479,13 +570,26 @@ function renderSettings(body, data, rerender) {
         <label class="field">Warn when a unit hasn't moved for (days)<input type="number" id="stale" step="1" value="${esc(s.staleDays)}"></label>
         <label class="field">Currency symbol<input type="text" id="cur" value="${esc(s.currency)}" maxlength="3"></label>
       </div>
+      <h3 style="margin-top:8px">${icon('undo')} Returns from your orders</h3>
+      <label class="check"><input type="checkbox" id="autoRf" ${s.autoFromRefunds !== false ? 'checked' : ''}> Create a unit for each refunded item in your SellerToolkit / SellerFuse orders</label>
+      <div class="form-grid"><label class="field">For refunds from<input type="date" id="rfFrom" value="${esc(s.refundsFrom || '')}"><span class="hint">Older refunds are left out so the tracker isn't flooded with history</span></label></div>
+      <p class="small muted">You don't have to wait for Amazon's returns report: a refund in your order data starts the unit. It never doubles up with the report, which fills in the LPN and condition when you import it. Items your orders say went back into sellable stock are marked auto-relisted. Every returned unit also gets the FBA fulfilment fee from its order, which Amazon keeps on a return. A refund with no item coming back (a "returnless refund") shows as a unit that never moves: write it off.</p>
+      <div class="row"><button class="btn" id="rfNow" type="button">${icon('refresh', 14)} Check my orders now</button></div>
       <div class="callout small">Google Sheets sync for returns arrives with FBA Admin's Google sign-in, writing Returns, Movements, SKU costs, Unmatched and Import log tabs to your FBA Accounting sheet. Until then, use <b>Units → CSV</b> for a spreadsheet copy, and the <b>Backup</b> button to keep your data safe.</div>
       <div class="row"><button class="btn primary" id="save">${icon('check')} Save</button>
         <span class="grow"></span><button class="btn" id="ledger">${icon('download')} Full ledger CSV</button></div>
     </div>`;
   body.querySelector('#save').onclick = async () => {
-    await saveSettings({ costsIncludeVat: body.querySelector('#vat').checked, staleDays: Math.max(1, Math.round(num(body.querySelector('#stale').value) || 30)), currency: body.querySelector('#cur').value.trim() || '£' });
+    await saveSettings({ costsIncludeVat: body.querySelector('#vat').checked, staleDays: Math.max(1, Math.round(num(body.querySelector('#stale').value) || 30)), currency: body.querySelector('#cur').value.trim() || '£',
+      autoFromRefunds: body.querySelector('#autoRf').checked, refundsFrom: body.querySelector('#rfFrom').value });
     toast('Saved', 'success'); rerender();
+  };
+  body.querySelector('#rfNow').onclick = async () => {
+    try {
+      const r = await syncRefunds({ force: true });
+      toast(r ? `${r.created} unit${r.created === 1 ? '' : 's'} added from refunds, outbound fee added to ${r.feesAdded}` : 'No order data yet: import SellerToolkit Orders – Detailed in FBA Admin', r?.created ? 'success' : 'info', 6000);
+    } catch (e) { toast(e.message, 'error'); }
+    rerender();
   };
   body.querySelector('#ledger').onclick = () => downloadFile(`returns-ledger-${today()}.csv`, toCSV(ledgerRows(data.units)));
 }

@@ -1,4 +1,5 @@
-// FBA Admin — the Monday summary posted to Discord. Pure: builds the message from loadAll() data.
+// FBA Admin — the weekly summary, shown as "Last week" at the top of the dashboard. Pure: built from loadAll() data.
+// (Its shape, title + fields, is what used to be posted to Discord before 2.2.)
 import { compute, cash, presetRange } from './pnl.js';
 import { guideStatus } from './guide.js';
 import { stockReport } from './stock.js';

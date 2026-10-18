@@ -530,3 +530,20 @@ body.standalone #toasts { bottom: calc(18px + env(safe-area-inset-bottom)); }
 /* ---------- Spend log (v2.1) ---------- */
 .spend-log { display: flex; flex-direction: column; gap: 8px; }
 .spend-log table.data { background: var(--panel); border-radius: 10px; }
+
+/* ---------- Last week card (v2.2) ---------- */
+details.weekly { margin-bottom: 14px; }
+details.weekly summary { list-style: none; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+details.weekly summary::-webkit-details-marker { display: none; }
+details.weekly summary::before { content: '▸'; color: var(--muted); }
+details.weekly[open] summary::before { content: '▾'; }
+.weekly-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 18px; margin-top: 12px; }
+.weekly-grid .wide { grid-column: 1 / -1; }
+@media (max-width: 640px) { .weekly-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- Start Up Loan (v2.2) ---------- */
+.loan-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 14px; margin-top: 10px; }
+.loan-grid > .card { margin-top: 0; }
+.loan-bal { font-size: 24px; font-weight: 750; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.loan-card table.data td { padding: 6px 4px; }
+.loan-card table.data td.num { white-space: normal; }

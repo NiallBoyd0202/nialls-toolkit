@@ -63,10 +63,10 @@ function emit(s) { lastStatus = s; listeners.forEach((fn) => { try { fn(s); } ca
 const mt = (r) => (typeof r?._mt === 'number' ? r._mt : stamp(r));
 const keyOf = (name, key) => `${name}|${JSON.stringify(key)}`;
 
-async function gzip(text) {
+export async function gzip(text) {
   return new Response(new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'))).blob();
 }
-async function gunzip(blob) {
+export async function gunzip(blob) {
   return new Response(blob.stream().pipeThrough(new DecompressionStream('gzip'))).text();
 }
 async function blobToDataUrl(blob) {

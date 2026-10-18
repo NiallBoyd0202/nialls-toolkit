@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Niall's Toolkit",
   "short_name": "Niall's Toolkit",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "minimum_chrome_version": "116",
   "description": "Amazon storefront tracker, supplier outreach, FBA returns tracker, FBA accounting and eBay profit tracker. Syncs with the app on your phone through your Google Drive.",
   "icons": {
@@ -36,8 +36,6 @@
   ],
   "host_permissions": [
     "https://api.keepa.com/*",
-    "https://discord.com/api/webhooks/*",
-    "https://discordapp.com/api/webhooks/*",
     "https://sheets.googleapis.com/*",
     "https://www.googleapis.com/*",
     "https://oauth2.googleapis.com/*"

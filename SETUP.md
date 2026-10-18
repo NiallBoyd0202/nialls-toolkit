@@ -98,7 +98,7 @@ Each device keeps its own **Keepa API key** unless you choose otherwise. Either:
 - type it once on each device (**Settings → Keepa API**), or
 - on any device, tick **Devices & sync → Sync my API keys too**, and the others receive it at their next sync.
 
-The Discord webhook, your targets, rules and every other setting sync automatically.
+Your targets, rules and every other setting sync automatically.
 
 ---
 
@@ -107,7 +107,7 @@ The Discord webhook, your targets, rules and every other setting sync automatica
 - **Offline.** The Windows and iPhone apps open without internet once they've been opened online at least once. Changes made offline sync when you're back online.
 - **The Amazon "Track seller" button** works only in the Chrome extension. On the iPhone, copy the storefront (or product) link in the Amazon app or Safari, open the toolkit and tap **Storefront tracker → Paste link**.
 - **On the go:** **Cash flow → Log a spend** keeps today's budget up to date before the bank statement catches up, and **Invoices → Take a photo** files a receipt straight from the camera.
-- **The Monday Discord summary** goes from whichever device is open first after the time you set. Each device syncs before sending, so it's only sent once.
+- **Weekly backups** to Google Drive (Backup & restore) are made by whichever device is open first that week, and kept forever in **Niall's Toolkit Backups**.
 - **Receipts and invoices** you add on one device appear on the others, including photos taken on the iPhone.
 - **Backups** are still worth making now and then (Backup & restore → Export everything). Sync copies mistakes too, such as deleting the wrong thing.
 - **Turning sync off on one device** leaves its data where it is and stops it sending or receiving changes. Your other devices carry on.

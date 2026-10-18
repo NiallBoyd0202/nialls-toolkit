@@ -92,6 +92,22 @@ export class KeepaClient {
     }
     return out;
   }
+
+  // Products by barcode (EAN / UPC), up to 100 codes per call: about 1 token per product found.
+  async productsByCode(domain, codes, { statsDays = 90 } = {}) {
+    const out = [];
+    for (const group of chunk(codes, 100)) {
+      const data = await this._request('product', { domain, code: group.join(','), stats: statsDays, history: 0 });
+      out.push(...(data.products || []));
+    }
+    return out;
+  }
+
+  // Search by words (for price list lines with no barcode). Costs more than a barcode lookup: about 10 tokens.
+  async searchProducts(domain, term, { statsDays = 90 } = {}) {
+    const data = await this._request('search', { domain, type: 'product', term, stats: statsDays, history: 0, page: 0 });
+    return data.products || [];
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -211,5 +227,18 @@ export class DemoKeepa {
   async products(domain, asins) {
     await this._spend(asins.length);
     return asins.map((a) => demoProduct(a, domain));
+  }
+
+  // Demo: about 3 in 4 barcodes are "found", each on a made-up product carrying that barcode.
+  async productsByCode(domain, codes) {
+    const found = codes.filter((c) => hash(`code${c}`) % 4 !== 0);
+    await this._spend(found.length);
+    return found.map((c) => ({ ...demoProduct(fakeAsin(rng(hash(`asin${c}`))), domain), eanList: [String(c)] }));
+  }
+
+  async searchProducts(domain, term) {
+    await this._spend(10);
+    const r = rng(hash(term));
+    return Array.from({ length: 1 + Math.floor(r() * 3) }, () => demoProduct(fakeAsin(r), domain));
   }
 }

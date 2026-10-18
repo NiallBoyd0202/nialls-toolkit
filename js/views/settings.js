@@ -1,6 +1,6 @@
-// Settings: Keepa key, demo mode, Discord, eBay fee estimate, backup/restore.
+// Settings: Keepa key, demo mode, eBay fee estimate, backup/restore.
 import * as db from '../db.js';
-import { getSettings, saveSettings, discordSend, isDemo, APP_NAME } from '../services.js';
+import { getSettings, saveSettings, isDemo, APP_NAME } from '../services.js';
 import { KeepaClient } from '../keepa.js';
 import { icon, toast, confirmBox } from '../ui.js';
 import { esc, num } from '../util.js';
@@ -47,13 +47,7 @@ export async function render(root) {
     </div>
 
     <div class="card card-pad stack">
-      <h3>${icon('bell')} Discord</h3>
-      ${field('discordWebhook', 'Webhook URL', s.discordWebhook, { type: 'url', hint: 'Discord channel → Edit Channel → Integrations → Webhooks → New Webhook → Copy URL' })}
-      ${check('discordOnNew', 'Post new storefront products after each refresh', s.discordOnNew)}
-      <div class="form-grid">${field('discordMaxPerSeller', 'Max products per storefront per post (1–10)', s.discordMaxPerSeller, { step: '1' })}</div>
-      <div class="row"><button class="btn" id="testDiscord" type="button">Send test message</button></div>
-
-      <h3 style="margin-top:10px">${icon('ebay')} eBay fee estimate</h3>
+      <h3>${icon('ebay')} eBay fee estimate</h3>
       <p class="small muted">Only used for the eBay Orders report, which has no fee data. Transaction reports use the real fees.</p>
       <div class="form-grid">
         ${field('ebayFeePct', 'Final value fee %', +(s.ebayFeePct * 100).toFixed(2), { step: '0.1' })}
@@ -82,9 +76,6 @@ export async function render(root) {
     keepaKey: $('keepaKey').value.trim(),
     demoMode: $('demoMode').checked,
     productCacheHours: Math.max(0, Number($('productCacheHours').value || 24)),
-    discordWebhook: $('discordWebhook').value.trim(),
-    discordOnNew: $('discordOnNew').checked,
-    discordMaxPerSeller: Math.max(1, Math.min(10, Number($('discordMaxPerSeller').value || 10))),
     ebayFeePct: Number($('ebayFeePct').value || 0) / 100,
     ebayFeeFixed: Number($('ebayFeeFixed').value || 0),
   });
@@ -113,16 +104,6 @@ export async function render(root) {
       const t = await new KeepaClient(key).tokenStatus();
       $('testOut').innerHTML = `<span class="pos">✓ Key works</span> — ${num(t.tokensLeft)} tokens available, refilling ${num(t.refillRate)}/min`;
     } catch (e) { $('testOut').innerHTML = `<span class="neg">${esc(e.message)}</span>`; }
-  };
-
-  $('testDiscord').onclick = async () => {
-    const url = $('discordWebhook').value.trim();
-    if (!url) return toast('Paste a webhook URL first', 'error');
-    await saveSettings({ discordWebhook: url });
-    try {
-      await discordSend({ username: APP_NAME, content: `✅ ${APP_NAME} is connected — new storefront products will be posted here after each refresh.` });
-      toast('Test message sent', 'success');
-    } catch (e) { toast(e.message, 'error'); }
   };
 
   renderBackupCard($('backupCard'));

@@ -91,7 +91,6 @@ async function runRefresh(keys, progressEl, { fetchDetails, full = false, label 
     if (res.tokensUsed) parts.push(`${num(res.tokensUsed)} tokens used`);
     toast(parts.join(' · '), 'success', 6000);
     if (res.errors.length) toast(`${res.errors.length} failed: ${res.errors.map((e) => `${e.seller} (${e.error})`).join('; ')}`, 'error', 9000);
-    if (res.discordError) toast(`Discord: ${res.discordError}`, 'error');
     return res;
   } catch (e) {
     p.done();

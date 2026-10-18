@@ -40,6 +40,8 @@ export const COST_BUCKETS = [
   { id: 'cogs', label: 'COGS', basis: true },
   { id: 'inboundOriginal', label: 'Original inbound', basis: true },
   { id: 'returnProcessingFee', label: 'Return processing fee', basis: false },
+  // Amazon refunds most of the referral fee on a return, but keeps the FBA fulfilment fee for sending it out
+  { id: 'outboundFee', label: 'Outbound FBA fee (kept by Amazon)', basis: false },
   { id: 'removalFee', label: 'Removal fee', basis: false },
   { id: 'prepFee', label: 'Prep / grading', basis: false },
   { id: 'storageFee', label: 'Storage at prep', basis: false },

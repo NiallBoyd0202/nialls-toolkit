@@ -1,7 +1,7 @@
 // Service worker: side panel + full-tab dashboard, handles "Track seller" from Amazon pages and the context menu.
 import { addSeller } from './js/services.js';
 import { parseSellerInput, domainFromHost } from './js/util.js';
-import { maybeSendWeekly } from './js/fbaadmin/weeklysend.js';
+import { maybeBackup } from './js/sync/drivebackup.js';
 import { syncNow, syncState } from './js/sync/sync.js';
 
 const DASHBOARD = chrome.runtime.getURL('dashboard.html');
@@ -80,14 +80,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 // ---------------------------------------------------------------------------
-// FBA Admin: the weekly summary to Discord (see fbaadmin/weeklysend.js), checked every hour while Chrome is open.
-// Sync between devices: every 15 minutes while Chrome is open, even with the dashboard closed.
+// While Chrome is open, even with the dashboard closed: sync every 15 minutes, and check every hour whether the
+// weekly Google Drive backup is due (sync/drivebackup.js).
 // ---------------------------------------------------------------------------
-const WEEKLY = 'fbaWeeklySummary';
+const BACKUP = 'ntBackup';
 const SYNC = 'ntSync';
 
 function scheduleAlarms() {
-  chrome.alarms?.get(WEEKLY, (a) => { if (!a) chrome.alarms.create(WEEKLY, { delayInMinutes: 1, periodInMinutes: 60 }); });
+  chrome.alarms?.clear('fbaWeeklySummary'); // the old Monday Discord summary (removed in 2.2)
+  chrome.alarms?.get(BACKUP, (a) => { if (!a) chrome.alarms.create(BACKUP, { delayInMinutes: 3, periodInMinutes: 60 }); });
   chrome.alarms?.get(SYNC, (a) => { if (!a) chrome.alarms.create(SYNC, { delayInMinutes: 2, periodInMinutes: 15 }); });
 }
 
@@ -98,12 +99,19 @@ async function backgroundSync() {
   if (r && (r.applied || r.deleted || r.settings)) chrome.runtime.sendMessage({ type: 'synced', result: { ...r, stores: [...(r.stores || [])] } }).catch(() => {});
 }
 
+// Unpacked extension: when the files in its folder are a newer version than the one Chrome is running (an update
+// was copied in), reload itself, so there's no need to click ↻ on chrome://extensions.
+async function reloadIfUpdated() {
+  try {
+    const onDisk = await (await fetch(chrome.runtime.getURL('manifest.json'), { cache: 'no-store' })).json();
+    if (onDisk.version && onDisk.version !== chrome.runtime.getManifest().version) chrome.runtime.reload();
+  } catch { /* keep running the current version */ }
+}
+
 chrome.alarms?.onAlarm.addListener((a) => {
-  if (a.name === WEEKLY) maybeSendWeekly().catch(() => {});
-  if (a.name === SYNC) backgroundSync().catch(() => {});
+  if (a.name === BACKUP) maybeBackup().catch(() => {});
+  if (a.name === SYNC) { reloadIfUpdated(); backgroundSync().catch(() => {}); }
 });
 chrome.runtime.onInstalled.addListener(scheduleAlarms);
-chrome.runtime.onStartup.addListener(scheduleAlarms);
-chrome.runtime.onMessage.addListener((msg) => { if (msg?.type === 'weeklyChanged') { scheduleAlarms(); maybeSendWeekly().catch(() => {}); } return false; });
+chrome.runtime.onStartup.addListener(() => { scheduleAlarms(); reloadIfUpdated(); });
 scheduleAlarms();
-self.ntSendWeekly = maybeSendWeekly; // for checking from DevTools: await ntSendWeekly({ force: true })

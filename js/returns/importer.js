@@ -82,11 +82,23 @@ const handlers = {
     if (!row.sku) return miss(ctx, 'amazon_returns', 'No SKU on this return', row);
     const qty = Math.max(1, int(row.quantity, 1));
     const disposition = normDisposition(row.disposition);
-    const all = ctx.index();
     for (let n = 1; n <= qty; n++) {
+      const all = ctx.index();
       const lpn = row.lpn ? (qty > 1 ? `${row.lpn}#${n}` : row.lpn) : '';
       const dedupeKey = lpn ? '' : key('rt', row.returnDate, row.orderId, row.sku, n);
       const existing = all.find((u) => (lpn && u.lpn === lpn) || (dedupeKey && u.dedupeKey === dedupeKey));
+      // A unit made earlier from a refund in your order data: this report confirms it, so fill it in (no duplicate)
+      const fromRefund = !existing && row.orderId ? all.find((u) => u.fromRefund && lc(u.orderId) === lc(row.orderId) && lc(u.sku) === lc(row.sku)) : null;
+      if (fromRefund) {
+        let u = { ...fromRefund, fromRefund: false, lpn, dedupeKey, fnsku: row.fnsku || fromRefund.fnsku, title: fromRefund.title || row.title, asin: fromRefund.asin || row.asin,
+          returnDate: row.returnDate || fromRefund.returnDate, disposition, amazonStatus: row.amazonStatus,
+          reason: [row.reason, row.comments].filter(Boolean).join(' — ') || fromRefund.reason, notes: '' };
+        if (disposition === 'SELLABLE' && /inventory|sellable/i.test(row.amazonStatus || '') && u.status === 'returned_at_amazon') {
+          u = transition(u, 'relisted_by_amazon', { date: u.returnDate, note: 'Returned to sellable stock by Amazon' });
+        }
+        ctx.save(u); ctx.stats.updated++;
+        continue;
+      }
       if (existing) {
         // Same unit seen again: refresh what Amazon may have updated, nothing else.
         const changed = (row.amazonStatus && existing.amazonStatus !== row.amazonStatus) || (disposition !== 'UNKNOWN' && existing.disposition !== disposition);

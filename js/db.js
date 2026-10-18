@@ -12,8 +12,8 @@ const DB_NAME = 'nialls-toolkit';
 // v4: FBA Admin SellerToolkit expenses. v5: inventory ledger + listings. v6: Amazon settlements.
 // v7: expense tracker + Amazon inventory age (FBA Inventory report). v8: director's loan entries.
 // v9: sync tombstones. v10: retailer & wholesaler outreach. v11: cash-flow daily targets and payout predictions.
-// v12: spend log.
-export const DB_VERSION = 12;
+// v12: spend log. v13: Start Up Loan.
+export const DB_VERSION = 13;
 
 const STORES = allStores();
 
