@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Niall's Toolkit icon (vector copy of icons/icon128.png): storefront with a magnifier -->
+  <rect width="128" height="128" rx="26" fill="#4f4fc9"/>
+  <g id="art">
+    <rect x="28" y="45" width="72" height="35" fill="#fff"/>
+    <rect x="26" y="26" width="19" height="20" fill="#fff"/>
+    <rect x="45" y="26" width="19" height="20" fill="#ffc44d"/>
+    <rect x="64" y="26" width="20" height="20" fill="#fff"/>
+    <rect x="84" y="26" width="20" height="20" fill="#ffc44d"/>
+    <circle cx="78" cy="78" r="16" fill="#4f4fc9" stroke="#ffc44d" stroke-width="8"/>
+    <line x1="91" y1="91" x2="110" y2="111" stroke="#ffc44d" stroke-width="11" stroke-linecap="round"/>
+  </g>
+</svg>

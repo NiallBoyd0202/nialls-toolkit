@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Niall's Toolkit</title>
+  <link rel="icon" href="icons/icon32.png">
+  <!-- installable app (Windows / iPhone); the Chrome extension ignores these -->
+  <link rel="manifest" href="app.webmanifest">
+  <meta name="theme-color" content="#2a0f47">
+  <link rel="apple-touch-icon" href="icons/icon180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Toolkit">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="side-inner">
+        <div class="brand"><img src="icons/icon48.png" width="28" height="28" alt=""><span>Niall's Toolkit</span></div>
+        <nav id="nav"></nav>
+        <div class="side-foot small">Your data stays on your devices and in your own Google Drive</div>
+      </div>
+    </aside>
+    <div class="side-scrim" id="scrim"></div>
+    <div class="main">
+      <header class="topbar">
+        <button class="icon-btn menu-btn" id="menuBtn" aria-label="Menu">☰</button>
+        <h1 id="pageTitle">Niall's Toolkit</h1>
+        <div class="top-right">
+          <span id="demoBadge" class="badge demo" hidden>Demo mode</span>
+          <div id="tokens" class="tokens" title="Keepa API tokens"></div>
+          <button class="sync-ind" id="syncInd" type="button" hidden></button>
+          <button class="btn small" id="backupBtn" type="button" title="Export or import this page's data">Backup</button>
+          <button class="btn small" id="tabBtn" type="button" title="Open in a full tab" hidden>Tab ↗</button>
+        </div>
+      </header>
+      <main id="view" class="view"></main>
+    </div>
+  </div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

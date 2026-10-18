@@ -1,0 +1,19 @@
+#nt-track {
+  position: fixed; right: 18px; bottom: 18px; z-index: 2147483000;
+  display: flex; border-radius: 999px; overflow: hidden;
+  box-shadow: 0 6px 24px rgba(15, 18, 40, .28);
+  font: 600 14px/1 -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+#nt-track button {
+  border: 0; cursor: pointer; color: #fff; background: #4f4fc9; padding: 12px 16px; font: inherit;
+}
+#nt-track button:hover { background: #3f3fb0; }
+#nt-track .nt-open { border-left: 1px solid rgba(255,255,255,.25); padding: 12px 14px; }
+#nt-toast {
+  position: fixed; right: 18px; bottom: 72px; z-index: 2147483001; display: none;
+  max-width: 320px; padding: 12px 14px; border-radius: 10px; color: #fff;
+  font: 500 13px/1.4 -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  box-shadow: 0 6px 24px rgba(15, 18, 40, .28);
+}
+#nt-toast.ok { background: #14532d; }
+#nt-toast.err { background: #7f1d1d; }
